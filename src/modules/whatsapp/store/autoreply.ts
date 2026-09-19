@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { WASocket } from "@whiskeysockets/baileys";
 import { normalizeMessageContent } from "@whiskeysockets/baileys";
 import { logger } from "@/lib/logger";
+import { executeAutoReplyAction, renderAutoReplyResponse } from "./autoreply-actions";
 
 // Helper for permission check (Deduplicate from command-handler if possible, but keep simple here)
 function canAutoReply(config: any, fromMe: boolean, senderJid: string): boolean {
@@ -83,6 +84,11 @@ export async function bindAutoReply(sock: WASocket, sessionId: string) {
 
         if (!config || !config.enabled) return;
 
+        const rules = await prisma.autoReply.findMany({
+            where: { session: { sessionId } },
+            orderBy: { createdAt: "asc" }
+        });
+
         for (const msg of messages) {
             const fromMe = msg.key.fromMe || false;
             const remoteJid = msg.key.remoteJid;
@@ -102,20 +108,11 @@ export async function bindAutoReply(sock: WASocket, sessionId: string) {
             if (!canAutoReply(config, fromMe, senderJid)) continue;
 
             const content = normalizeMessageContent(msg.message);
-            const text = content?.conversation || content?.extendedTextMessage?.text || ""; // Caption?
+            const text = content?.conversation || content?.extendedTextMessage?.text || content?.imageMessage?.caption || content?.videoMessage?.caption || "";
 
             if (!text) continue;
 
             try {
-                // Fetch rules for this session
-                const rules = await prisma.autoReply.findMany({
-                    where: {
-                        session: {
-                            sessionId: sessionId
-                        }
-                    }
-                });
-
                 for (const rule of rules) {
                     let match = false;
                     const keyword = rule.keyword.toLowerCase();
@@ -127,6 +124,9 @@ export async function bindAutoReply(sock: WASocket, sessionId: string) {
                             break;
                         case 'CONTAINS':
                             match = incoming.includes(keyword);
+                            break;
+                        case 'STARTS_WITH':
+                            match = incoming.startsWith(keyword);
                             break;
                         case 'REGEX':
                             try {
@@ -147,38 +147,36 @@ export async function bindAutoReply(sock: WASocket, sessionId: string) {
                         if (triggerType === 'PRIVATE' && isGroup) continue;
 
                         logger.info("AutoReply", `Match: ${rule.keyword} -> ${remoteJid}`);
+                        const result = await executeAutoReplyAction(
+                            rule.actionType,
+                            rule.actionConfig,
+                            { sessionId, message: text, senderJid, chatJid: remoteJid, matchedKeyword: rule.keyword },
+                            rule.actionTimeoutMs
+                        );
+                        const response = renderAutoReplyResponse(rule.response, result);
 
                         if (rule.isMedia && rule.mediaUrl) {
                             const url = rule.mediaUrl;
-                            const type = (rule as any).mediaType || "document";
-                            
-                            let payload: any = {};
-                            if (rule.response) {
-                                payload.caption = rule.response;
+                            const type = rule.mediaType || "document";
+                            const payload: Record<string, unknown> = response ? { caption: response } : {};
+
+                            if (type === "image") payload.image = { url };
+                            else if (type === "video") payload.video = { url };
+                            else if (type === "audio") payload.audio = { url };
+                            else {
+                                payload.document = { url };
+                                payload.mimetype = "application/octet-stream";
+                                payload.fileName = url.split("/").pop() || "document";
                             }
 
-                            if (type === "image") {
-                                payload.image = { url };
-                            } else if (type === "video") {
-                                payload.video = { url };
-                            } else if (type === "audio") {
-                                payload = { audio: { url } };
-                            } else {
-                                payload.document = { url };
-                                payload.mimetype = 'application/octet-stream';
-                                payload.fileName = url.split('/').pop() || 'document';
-                            }
-                            
                             try {
                                 await sock.sendMessage(remoteJid, payload, { quoted: msg });
                             } catch (err: any) {
-                                logger.error("AutoReply", `Failed to send media auto-reply from URL: ${err.message}. Falling back to text if response exists.`);
-                                if (rule.response) {
-                                    await sock.sendMessage(remoteJid, { text: rule.response }, { quoted: msg });
-                                }
+                                logger.error("AutoReply", `Failed to send media auto-reply from URL: ${err.message}. Falling back to text.`);
+                                if (response) await sock.sendMessage(remoteJid, { text: response }, { quoted: msg });
                             }
-                        } else if (rule.response) {
-                            await sock.sendMessage(remoteJid, { text: rule.response }, { quoted: msg });
+                        } else if (response) {
+                            await sock.sendMessage(remoteJid, { text: response }, { quoted: msg });
                         }
 
                         break;

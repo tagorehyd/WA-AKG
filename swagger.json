@@ -3,12 +3,12 @@
   "info": {
     "title": "WA-AKG API Documentation",
     "version": "1.2.0",
-    "description": "\n# WhatsApp AI Gateway - Complete API Reference\n\nProfessional WhatsApp Gateway with **64 API endpoints** for complete WhatsApp automation.\n\n## 🔐 Authentication\nAll endpoints require authentication via:\n1. **API Key Header**: `X-API-Key: your-api-key`\n2. **Session Cookie**: `next-auth.session-token` (automatically sent by browser)\n\n## 📋 Common Parameters\n- **sessionId**: Unique session identifier (e.g., \"mysession-01\")\n- **jid**: WhatsApp JID format:\n  - Personal: `628123456789@s.whatsapp.net`\n  - Group: `120363123456789@g.us`\n\n## 📊 Rate Limits\n- Phone check: Max 50 numbers per request\n- Broadcast: 10-20s random delay between messages\n- Message history: Max 100 messages\n                "
+    "description": "\n# WhatsApp AI Gateway - Complete API Reference\n\nProfessional WhatsApp Gateway with **64 API endpoints** for complete WhatsApp automation.\n\n## \ud83d\udd10 Authentication\nAll endpoints require authentication via:\n1. **API Key Header**: `X-API-Key: your-api-key`\n2. **Session Cookie**: `next-auth.session-token` (automatically sent by browser)\n\n## \ud83d\udccb Common Parameters\n- **sessionId**: Unique session identifier (e.g., \"mysession-01\")\n- **jid**: WhatsApp JID format:\n  - Personal: `628123456789@s.whatsapp.net`\n  - Group: `120363123456789@g.us`\n\n## \ud83d\udcca Rate Limits\n- Phone check: Max 50 numbers per request\n- Broadcast: 10-20s random delay between messages\n- Message history: Max 100 messages\n                "
   },
   "servers": [
     {
-      "url": "http://localhost:3000/api",
-      "description": "API Server"
+      "url": "/api",
+      "description": "Connected API server"
     }
   ],
   "components": {
@@ -1607,7 +1607,14 @@
           "503": {
             "$ref": "#/components/responses/SessionNotReady"
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Python",
+            "label": "Python requests",
+            "source": "import requests\n\nbase_url = \"https://your-wa-akg-host/api\"\nresponse = requests.post(\n    f\"{base_url}/messages/sales-01/628123456789@s.whatsapp.net/send\",\n    headers={\"X-API-Key\": \"YOUR_API_KEY\"},\n    json={\"message\": {\"text\": \"Hello, how can I help you?\"}},\n    timeout=30,\n)\nresponse.raise_for_status()\nprint(response.json())"
+          }
+        ]
       }
     },
     "/messages/{sessionId}/{jid}/media": {
@@ -2156,7 +2163,7 @@
                 "properties": {
                   "emoji": {
                     "type": "string",
-                    "example": "👍",
+                    "example": "\ud83d\udc4d",
                     "description": "Emoji or empty string to remove"
                   }
                 }
@@ -2205,7 +2212,7 @@
           "Messaging"
         ],
         "summary": "Reply to a message (quoted reply)",
-        "description": "Send a quoted reply to a specific message by its ID. Uses same request format as /send — pass a Baileys message object.",
+        "description": "Send a quoted reply to a specific message by its ID. Uses same request format as /send \u2014 pass a Baileys message object.",
         "parameters": [
           {
             "name": "sessionId",
@@ -2248,7 +2255,7 @@
                 "properties": {
                   "message": {
                     "type": "object",
-                    "description": "Message content — same format as /send (text, image, video, etc.)",
+                    "description": "Message content \u2014 same format as /send (text, image, video, etc.)",
                     "example": {
                       "text": "Thanks for your message!"
                     }
@@ -2378,7 +2385,7 @@
                   },
                   "message": {
                     "type": "object",
-                    "description": "Message content — same format as /send (text, image, video, etc.)",
+                    "description": "Message content \u2014 same format as /send (text, image, video, etc.)",
                     "example": {
                       "text": "Sure, let me help you!"
                     }
@@ -4766,6 +4773,27 @@
                       "GROUP",
                       "PRIVATE"
                     ]
+                  },
+                  "actionType": {
+                    "type": "string",
+                    "enum": [
+                      "REPLY",
+                      "HTTP",
+                      "COMMAND",
+                      "PYTHON"
+                    ],
+                    "default": "REPLY"
+                  },
+                  "actionConfig": {
+                    "type": "object",
+                    "nullable": true,
+                    "description": "HTTP: {url, method, headers, body}; COMMAND: {command, args}; PYTHON: {code}. Dynamic actions require server enablement and allowlists."
+                  },
+                  "actionTimeoutMs": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 30000,
+                    "default": 10000
                   }
                 }
               },
@@ -4792,7 +4820,14 @@
           "403": {
             "$ref": "#/components/responses/Forbidden"
           }
-        }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Python",
+            "label": "Python action rule",
+            "source": "import requests\n\nrequests.post(\n    \"https://your-wa-akg-host/api/autoreplies/sales-01\",\n    headers={\"X-API-Key\": \"YOUR_API_KEY\"},\n    json={\n        \"keyword\": \"!status\",\n        \"response\": \"Current status:\\n{{result}}\",\n        \"matchType\": \"EXACT\",\n        \"actionType\": \"PYTHON\",\n        \"actionConfig\": {\"code\": \"print('service is healthy')\"},\n    },\n    timeout=30,\n).raise_for_status()"
+          }
+        ]
       }
     },
     "/autoreplies/{sessionId}/{replyId}": {
@@ -4886,6 +4921,27 @@
                       "GROUP",
                       "PRIVATE"
                     ]
+                  },
+                  "actionType": {
+                    "type": "string",
+                    "enum": [
+                      "REPLY",
+                      "HTTP",
+                      "COMMAND",
+                      "PYTHON"
+                    ],
+                    "default": "REPLY"
+                  },
+                  "actionConfig": {
+                    "type": "object",
+                    "nullable": true,
+                    "description": "HTTP: {url, method, headers, body}; COMMAND: {command, args}; PYTHON: {code}. Dynamic actions require server enablement and allowlists."
+                  },
+                  "actionTimeoutMs": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 30000,
+                    "default": 10000
                   }
                 }
               },

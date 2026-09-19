@@ -17,9 +17,10 @@ export async function POST(
         
         const body = await request.json();
         const { message, mentions, quotedMessageId } = body;
+        const messagePayload = typeof message === "string" ? { text: message } : message;
 
-        if (!message) {
-            return NextResponse.json({ status: false, message: "message is required", error: "message is required" }, { status: 400 });
+        if (!messagePayload || typeof messagePayload !== "object" || Array.isArray(messagePayload)) {
+            return NextResponse.json({ status: false, message: "message must be text or a WhatsApp message object", error: "Invalid message" }, { status: 400 });
         }
 
         // Check if user can access this session
@@ -29,7 +30,7 @@ export async function POST(
         }
 
         // Send Message using ChatService
-        const result = await ChatService.sendTextMessage(sessionId, jid, message, mentions, quotedMessageId);
+        const result = await ChatService.sendTextMessage(sessionId, jid, messagePayload, mentions, quotedMessageId);
 
         return NextResponse.json({ status: true, message: "Message sent successfully", data: result });
     } catch (error: any) {

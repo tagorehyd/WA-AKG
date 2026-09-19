@@ -43,6 +43,9 @@ interface AutoReply {
     mediaUrl: string | null;
     mediaType: string | null;
     triggerType: string;
+    actionType: "REPLY" | "HTTP" | "COMMAND" | "PYTHON";
+    actionConfig: Record<string, unknown> | null;
+    actionTimeoutMs: number;
     createdAt: Date;
 }
 
@@ -61,6 +64,8 @@ export default function AutoReplyPage() {
     const [triggerType, setTriggerType] = useState("ALL");
     const [mediaUrl, setMediaUrl] = useState("");
     const [mediaType, setMediaType] = useState("image");
+    const [actionType, setActionType] = useState<AutoReply["actionType"]>("REPLY");
+    const [actionConfig, setActionConfig] = useState("{}");
 
     // Edit states
     const [isEditOpen, setIsEditOpen] = useState(false);
@@ -71,6 +76,8 @@ export default function AutoReplyPage() {
     const [editTriggerType, setEditTriggerType] = useState("ALL");
     const [editMediaUrl, setEditMediaUrl] = useState("");
     const [editMediaType, setEditMediaType] = useState("image");
+    const [editActionType, setEditActionType] = useState<AutoReply["actionType"]>("REPLY");
+    const [editActionConfig, setEditActionConfig] = useState("{}");
 
     useEffect(() => {
         if (sessionId) {
@@ -95,10 +102,12 @@ export default function AutoReplyPage() {
 
     const handleCreate = async () => {
         if (!sessionId) return;
-        if (!keyword.trim() || (!response.trim() && !mediaUrl.trim())) {
-            toast.error("Keyword and either response or media URL are required");
+        if (!keyword.trim() || (!response.trim() && !mediaUrl.trim() && actionType === "REPLY")) {
+            toast.error("Keyword and a reply, media URL, or action are required");
             return;
         }
+        let parsedActionConfig: Record<string, unknown> | null = null;
+        try { parsedActionConfig = actionType === "REPLY" ? null : JSON.parse(actionConfig); } catch { toast.error("Action configuration must be valid JSON"); return; }
 
         setSubmitting(true);
         try {
@@ -110,7 +119,9 @@ export default function AutoReplyPage() {
                 triggerType,
                 isMedia: !!mediaUrl.trim(),
                 mediaUrl: mediaUrl.trim() || null,
-                mediaType: mediaType || null
+                mediaType: mediaType || null,
+                actionType,
+                actionConfig: parsedActionConfig
             });
 
             toast.success("Auto-reply rule created");
@@ -145,6 +156,8 @@ export default function AutoReplyPage() {
         setTriggerType("ALL");
         setMediaUrl("");
         setMediaType("image");
+        setActionType("REPLY");
+        setActionConfig("{}");
     };
 
     const handleEdit = (rule: AutoReply) => {
@@ -155,15 +168,19 @@ export default function AutoReplyPage() {
         setEditTriggerType(rule.triggerType);
         setEditMediaUrl(rule.mediaUrl || "");
         setEditMediaType(rule.mediaType || "image");
+        setEditActionType(rule.actionType || "REPLY");
+        setEditActionConfig(JSON.stringify(rule.actionConfig || {}, null, 2));
         setIsEditOpen(true);
     };
 
     const handleUpdate = async () => {
         if (!sessionId || !editId) return;
-        if (!editKeyword.trim() || (!editResponse.trim() && !editMediaUrl.trim())) {
-            toast.error("Keyword and either response or media URL are required");
+        if (!editKeyword.trim() || (!editResponse.trim() && !editMediaUrl.trim() && editActionType === "REPLY")) {
+            toast.error("Keyword and a reply, media URL, or action are required");
             return;
         }
+        let parsedActionConfig: Record<string, unknown> | null = null;
+        try { parsedActionConfig = editActionType === "REPLY" ? null : JSON.parse(editActionConfig); } catch { toast.error("Action configuration must be valid JSON"); return; }
 
         setSubmitting(true);
         try {
@@ -174,7 +191,9 @@ export default function AutoReplyPage() {
                 triggerType: editTriggerType,
                 isMedia: !!editMediaUrl.trim(),
                 mediaUrl: editMediaUrl.trim() || null,
-                mediaType: editMediaType || null
+                mediaType: editMediaType || null,
+                actionType: editActionType,
+                actionConfig: parsedActionConfig
             });
 
             toast.success("Auto-reply rule updated");
@@ -250,6 +269,15 @@ export default function AutoReplyPage() {
                                         <SelectItem value="GROUP">Group Chats Only</SelectItem>
                                     </SelectContent>
                                 </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Action</Label>
+                                <Select value={actionType} onValueChange={(value) => setActionType(value as AutoReply["actionType"])}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent><SelectItem value="REPLY">Static reply</SelectItem><SelectItem value="HTTP">Call HTTP API</SelectItem><SelectItem value="COMMAND">Run allowlisted command</SelectItem><SelectItem value="PYTHON">Run Python code</SelectItem></SelectContent>
+                                </Select>
+                                {actionType !== "REPLY" && <><Textarea value={actionConfig} onChange={(e) => setActionConfig(e.target.value)} className="font-mono text-xs" placeholder={actionType === "HTTP" ? '{ "url": "https://api.example.com/status", "method": "GET" }' : actionType === "COMMAND" ? '{ "command": "uptime", "args": [] }' : '{ "code": "import os; print(os.environ[\"WA_AKG_AUTOREPLY_CONTEXT\"])" }'} /><p className="text-xs text-muted-foreground">Dynamic actions require server-side enablement and allowlists. Use {"{{result}}"} in the reply to include their output.</p></>}
                             </div>
 
                             <div className="space-y-2">
@@ -419,6 +447,15 @@ export default function AutoReplyPage() {
                         </div>
 
                         <div className="space-y-2">
+                            <Label>Action</Label>
+                            <Select value={editActionType} onValueChange={(value) => setEditActionType(value as AutoReply["actionType"])}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent><SelectItem value="REPLY">Static reply</SelectItem><SelectItem value="HTTP">Call HTTP API</SelectItem><SelectItem value="COMMAND">Run allowlisted command</SelectItem><SelectItem value="PYTHON">Run Python code</SelectItem></SelectContent>
+                            </Select>
+                            {editActionType !== "REPLY" && <><Textarea value={editActionConfig} onChange={(e) => setEditActionConfig(e.target.value)} className="font-mono text-xs" /><p className="text-xs text-muted-foreground">Use {"{{result}}"} in the reply to include action output.</p></>}
+                        </div>
+
+                        <div className="space-y-2">
                             <Label>Reply Message (Optional)</Label>
                             <Textarea 
                                 value={editResponse} 
@@ -454,7 +491,7 @@ export default function AutoReplyPage() {
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
-                        <Button onClick={handleUpdate} disabled={submitting || !editKeyword.trim() || (!editResponse.trim() && !editMediaUrl.trim())}>
+                        <Button onClick={handleUpdate} disabled={submitting || !editKeyword.trim() || (!editResponse.trim() && !editMediaUrl.trim() && editActionType === "REPLY")}>
                             {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : "Save Changes"}
                         </Button>
                     </DialogFooter>

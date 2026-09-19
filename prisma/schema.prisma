@@ -157,6 +157,9 @@ model AutoReply {
   mediaUrl    String?
   mediaType   String?
   triggerType String   @default("ALL") // ALL, GROUP, PRIVATE
+  actionType  String   @default("REPLY") // REPLY, HTTP, COMMAND, PYTHON
+  actionConfig Json?
+  actionTimeoutMs Int @default(10000)
   createdAt   DateTime @default(now())
 
   session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
