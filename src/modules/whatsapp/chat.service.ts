@@ -321,7 +321,7 @@ export class ChatService {
             msgPayload.mentions = mentions;
         }
 
-        const options: any = { mentions: mentions || [] };
+        const options: any = {};
         if (quotedOption) {
             options.quoted = quotedOption;
         }

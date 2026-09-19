@@ -901,7 +901,7 @@ All endpoints require authentication via:
                     post: {
                         tags: ["Messaging"],
                         summary: "Send message (text/media/sticker)",
-                        description: "Universal endpoint for sending text, images, videos, documents, and stickers. Supports mentions and all WhatsApp message types. The `message` field may be a plain string or a WhatsApp message object.",
+                        description: "Universal endpoint for sending text, images, videos, documents, and stickers. Supports mentions and all WhatsApp message types. The `message` field may be a plain string or a WhatsApp message object. Plain text responses use `message.conversation`; messages with mentions or quoted context use WhatsApp's `extendedTextMessage` format.",
                         "x-codeSamples": [{
                             lang: "Python",
                             label: "Python requests",

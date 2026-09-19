@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from "next/server";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { ChatService } from "@/modules/whatsapp/chat.service";
+import { formatSentMessageResponse } from "@/lib/message-response";
 
 export async function POST(
     request: NextRequest,
@@ -32,7 +33,7 @@ export async function POST(
         // Send Message using ChatService
         const result = await ChatService.sendTextMessage(sessionId, jid, messagePayload, mentions, quotedMessageId);
 
-        return NextResponse.json({ status: true, message: "Message sent successfully", data: result });
+        return NextResponse.json({ status: true, message: "Message sent successfully", data: formatSentMessageResponse(result, { ...messagePayload, mentions, quotedMessageId }) });
     } catch (error: any) {
         console.error("Send message error:", error);
         const errorMsg = error?.message || "Failed to send message";
