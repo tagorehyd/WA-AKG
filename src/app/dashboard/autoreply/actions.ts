@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { canAccessSession } from "@/lib/api-auth";
 import { getAuthenticatedUserForAction } from "@/lib/server-action-auth";
 import { Prisma } from "@prisma/client";
+import { validateAutoReplyAction } from "@/modules/whatsapp/store/autoreply-actions";
 
 // Fetch rules directly from DB without API call
 export async function getAutoReplies(sessionId: string) {
@@ -35,14 +36,15 @@ export async function getAutoReplies(sessionId: string) {
 }
 
 // Create a new auto reply directly to DB
-export async function createAutoReply(sessionId: string, data: { keyword: string; response?: string; matchType: string; isMedia: boolean; mediaUrl?: string | null; mediaType?: string | null; triggerType: string }) {
+export async function createAutoReply(sessionId: string, data: { keyword: string; response?: string; matchType: string; isMedia: boolean; mediaUrl?: string | null; mediaType?: string | null; triggerType: string; actionType?: string; actionConfig?: Record<string, unknown> | null; actionTimeoutMs?: number }) {
     const nextAuthSession = await getAuthenticatedUserForAction();
     if (!nextAuthSession) {
         throw new Error("Unauthorized");
     }
 
-    if (!data.keyword || (!data.response && !data.mediaUrl)) {
-        throw new Error("Keyword and either response or media are required");
+    const action = validateAutoReplyAction(data.actionType, data.actionConfig);
+    if (!data.keyword || (!data.response && !data.mediaUrl && action.actionType === "REPLY")) {
+        throw new Error("Keyword and a reply, media, or action are required");
     }
 
     const canAccess = await canAccessSession(nextAuthSession.id, nextAuthSession.role, sessionId);
@@ -68,7 +70,10 @@ export async function createAutoReply(sessionId: string, data: { keyword: string
         mediaUrl: data.mediaUrl || null,
         mediaType: data.mediaType || null,
         // @ts-ignore
-        triggerType: data.triggerType || "ALL"
+        triggerType: data.triggerType || "ALL",
+        actionType: action.actionType,
+        actionConfig: action.actionConfig === null ? Prisma.JsonNull : action.actionConfig as Prisma.InputJsonValue,
+        actionTimeoutMs: Math.min(Math.max(Number(data.actionTimeoutMs) || 10000, 1000), 30000)
     };
 
     const newRule = await prisma.autoReply.create({
@@ -102,14 +107,15 @@ export async function deleteAutoReply(sessionId: string, ruleId: string) {
     return { success: true };
 }
 
-export async function updateAutoReply(sessionId: string, ruleId: string, data: { keyword: string; response?: string; matchType: string; isMedia: boolean; mediaUrl?: string | null; mediaType?: string | null; triggerType: string }) {
+export async function updateAutoReply(sessionId: string, ruleId: string, data: { keyword: string; response?: string; matchType: string; isMedia: boolean; mediaUrl?: string | null; mediaType?: string | null; triggerType: string; actionType?: string; actionConfig?: Record<string, unknown> | null; actionTimeoutMs?: number }) {
     const nextAuthSession = await getAuthenticatedUserForAction();
     if (!nextAuthSession) {
         throw new Error("Unauthorized");
     }
 
-    if (!data.keyword || (!data.response && !data.mediaUrl)) {
-        throw new Error("Keyword and either response or media are required");
+    const action = validateAutoReplyAction(data.actionType, data.actionConfig);
+    if (!data.keyword || (!data.response && !data.mediaUrl && action.actionType === "REPLY")) {
+        throw new Error("Keyword and a reply, media, or action are required");
     }
 
     const rule = await prisma.autoReply.findUnique({
@@ -134,7 +140,10 @@ export async function updateAutoReply(sessionId: string, ruleId: string, data: {
         mediaUrl: data.mediaUrl || null,
         mediaType: data.mediaType || null,
         // @ts-ignore
-        triggerType: data.triggerType || "ALL"
+        triggerType: data.triggerType || "ALL",
+        actionType: action.actionType,
+        actionConfig: action.actionConfig === null ? Prisma.JsonNull : action.actionConfig as Prisma.InputJsonValue,
+        actionTimeoutMs: Math.min(Math.max(Number(data.actionTimeoutMs) || 10000, 1000), 30000)
     };
 
     const updatedRule = await prisma.autoReply.update({

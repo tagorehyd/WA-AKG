@@ -1,7 +1,8 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import { getAuthenticatedUser, canAccessSession, isAdmin } from "@/lib/api-auth";
+import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { validateAutoReplyAction } from "@/modules/whatsapp/store/autoreply-actions";
 
 // GET: List Auto Replies
 export async function GET(
@@ -58,9 +59,10 @@ export async function POST(
         }
 
         const body = await request.json();
-        const { keyword, response, matchType, isMedia, mediaUrl, mediaType, triggerType } = body;
+        const { keyword, response, matchType, isMedia, mediaUrl, mediaType, triggerType, actionType, actionConfig, actionTimeoutMs } = body;
+        const action = validateAutoReplyAction(actionType, actionConfig);
 
-        if (!keyword || (!response && !mediaUrl)) {
+        if (!keyword || (!response && !mediaUrl && action.actionType === "REPLY")) {
             return NextResponse.json({ status: false, message: "Keyword and either response or media are required", error: "Missing required fields" }, { status: 400 });
         }
 
@@ -87,7 +89,10 @@ export async function POST(
             mediaUrl: mediaUrl || null,
             mediaType: mediaType || null,
             // @ts-ignore: triggerType exists in generated schema but may be stale in editor types
-            triggerType: (triggerType as string) || "ALL"
+            triggerType: (triggerType as string) || "ALL",
+            actionType: action.actionType,
+            actionConfig: action.actionConfig === null ? Prisma.JsonNull : action.actionConfig as Prisma.InputJsonValue,
+            actionTimeoutMs: Math.min(Math.max(Number(actionTimeoutMs) || 10000, 1000), 30000)
         };
 
         const newRule = await prisma.autoReply.create({

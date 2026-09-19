@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { createSwaggerSpec } from "next-swagger-doc";
 
-export const getApiDocs = () => {
+export const getApiDocs = (serverUrl = "/api") => {
     const spec = createSwaggerSpec({
         apiFolder: "src/app/api",
         definition: {
@@ -33,8 +33,8 @@ All endpoints require authentication via:
             },
             servers: [
                 {
-                    url: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api",
-                    description: "API Server",
+                    url: serverUrl,
+                    description: "Connected API server",
                 },
             ],
             components: {
@@ -901,7 +901,22 @@ All endpoints require authentication via:
                     post: {
                         tags: ["Messaging"],
                         summary: "Send message (text/media/sticker)",
-                        description: "Universal endpoint for sending text, images, videos, documents, and stickers. Supports mentions and all WhatsApp message types.",
+                        description: "Universal endpoint for sending text, images, videos, documents, and stickers. Supports mentions and all WhatsApp message types. The `message` field may be a plain string or a WhatsApp message object.",
+                        "x-codeSamples": [{
+                            lang: "Python",
+                            label: "Python requests",
+                            source: `import requests
+
+base_url = "https://your-wa-akg-host/api"
+response = requests.post(
+    f"{base_url}/messages/sales-01/628123456789@s.whatsapp.net/send",
+    headers={"X-API-Key": "YOUR_API_KEY"},
+    json={"message": {"text": "Hello, how can I help you?"}},
+    timeout=30,
+)
+response.raise_for_status()
+print(response.json())`,
+                        }],
                         parameters: [
                             {
                                 name: "sessionId",
@@ -2658,6 +2673,24 @@ All endpoints require authentication via:
                     post: {
                         tags: ["Auto Reply"],
                         summary: "Create auto-reply rule",
+                        "x-codeSamples": [{
+                            lang: "Python",
+                            label: "Python action rule",
+                            source: `import requests
+
+requests.post(
+    "https://your-wa-akg-host/api/autoreplies/sales-01",
+    headers={"X-API-Key": "YOUR_API_KEY"},
+    json={
+        "keyword": "!status",
+        "response": "Current status:\n{{result}}",
+        "matchType": "EXACT",
+        "actionType": "PYTHON",
+        "actionConfig": {"code": "print('service is healthy')"},
+    },
+    timeout=30,
+).raise_for_status()`,
+                        }],
                         parameters: [
                             { name: "sessionId", in: "path", required: true, schema: { type: "string" } }
                         ],
@@ -2674,7 +2707,10 @@ All endpoints require authentication via:
                                             isMedia: { type: "boolean" },
                                             mediaUrl: { type: "string" },
                                             mediaType: { type: "string", enum: ["image", "video", "document", "audio"] },
-                                            triggerType: { type: "string", enum: ["ALL", "GROUP", "PRIVATE"] }
+                                            triggerType: { type: "string", enum: ["ALL", "GROUP", "PRIVATE"] },
+                                            actionType: { type: "string", enum: ["REPLY", "HTTP", "COMMAND", "PYTHON"], default: "REPLY" },
+                                            actionConfig: { type: "object", nullable: true, description: "HTTP: {url, method, headers, body}; COMMAND: {command, args}; PYTHON: {code}. Dynamic actions require server enablement and allowlists." },
+                                            actionTimeoutMs: { type: "integer", minimum: 1000, maximum: 30000, default: 10000 }
                                         }
                                     },
                                     example: {
@@ -2747,7 +2783,10 @@ All endpoints require authentication via:
                                             isMedia: { type: "boolean" },
                                             mediaUrl: { type: "string" },
                                             mediaType: { type: "string", enum: ["image", "video", "document", "audio"] },
-                                            triggerType: { type: "string", enum: ["ALL", "GROUP", "PRIVATE"] }
+                                            triggerType: { type: "string", enum: ["ALL", "GROUP", "PRIVATE"] },
+                                            actionType: { type: "string", enum: ["REPLY", "HTTP", "COMMAND", "PYTHON"], default: "REPLY" },
+                                            actionConfig: { type: "object", nullable: true, description: "HTTP: {url, method, headers, body}; COMMAND: {command, args}; PYTHON: {code}. Dynamic actions require server enablement and allowlists." },
+                                            actionTimeoutMs: { type: "integer", minimum: 1000, maximum: 30000, default: 10000 }
                                         }
                                     },
                                     example: {

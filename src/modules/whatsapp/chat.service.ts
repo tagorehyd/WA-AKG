@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { normalizeJid } from "@/lib/jid-utils";
+import { normalizeJid, resolveToPhoneJidBySessionId } from "@/lib/jid-utils";
 import { waManager } from "@/modules/whatsapp/manager";
 import { onMessageSent } from "@/lib/webhook";
 import Sticker from "wa-sticker-formatter";
@@ -237,6 +237,14 @@ export class ChatService {
             }
         }
 
+        if (typeof messagePayload === "string") {
+            messagePayload = { text: messagePayload };
+        }
+        if (!messagePayload || typeof messagePayload !== "object" || Array.isArray(messagePayload)) {
+            throw new Error("Message must be text or a WhatsApp message object");
+        }
+
+        const targetJid = await resolveToPhoneJidBySessionId(normalizeJid(jid), sessionId);
         let msgPayload = { ...messagePayload };
 
         // Normalize "text" to "caption" if a media message is sent with "text"
@@ -318,7 +326,7 @@ export class ChatService {
             options.quoted = quotedOption;
         }
 
-        const sendResult = await instance.socket.sendMessage(jid, msgPayload, options);
+        const sendResult = await instance.socket.sendMessage(targetJid, msgPayload, options);
 
         // Fire webhook for sent message (non-blocking)
         try {
